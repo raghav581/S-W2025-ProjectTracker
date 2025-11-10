@@ -38,13 +38,14 @@ const getToken = () => {
 
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {
   const token = getToken();
-  const headers: HeadersInit = {
+  // Use a concrete type to avoid indexing issues with HeadersInit union
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> | undefined),
   };
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_URL}${endpoint}`, {
