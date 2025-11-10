@@ -3,9 +3,139 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { projectsAPI, ProjectEntry, UserDetail, usersAPI, User } from '@/lib/api';
+import { projectsAPI, ProjectEntry, UserDetail, usersAPI, User, allowedEmailsAPI, AllowedEmail } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 
+function UsersManager({ users, onRefresh, setError, setSuccess }: { users: User[]; onRefresh: () => Promise<void> | void; setError: (s: string) => void; setSuccess: (s: string) => void; }) {
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+
+  const getId = (u: any) => u.id || u._id;
+  const isSelected = (u: any) => !!selected[getId(u)];
+  const toggle = (u: any) => setSelected(prev => ({ ...prev, [getId(u)]: !prev[getId(u)] }));
+  const toggleAll = () => {
+    if (Object.keys(selected).length === users.length && users.every(u => selected[getId(u)])) {
+      setSelected({});
+    } else {
+      const next: Record<string, boolean> = {};
+      users.forEach(u => { if (u.role !== 'superadmin') next[getId(u)] = true; });
+      setSelected(next);
+    }
+  };
+
+  const changeRole = async (u: any, role: 'user' | 'admin') => {
+    try {
+      setBusy(true);
+      await usersAPI.updateRole(getId(u), role);
+      setSuccess('Role updated successfully');
+      await onRefresh();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update role');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteOne = async (u: any) => {
+    if (!confirm(`Delete user ${u.email}?`)) return;
+    try {
+      setBusy(true);
+      await usersAPI.deleteUser(getId(u));
+      setSuccess('User deleted successfully');
+      await onRefresh();
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete user');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const bulkDelete = async () => {
+    const ids = users.filter(u => isSelected(u) && u.role !== 'superadmin').map(u => getId(u));
+    if (ids.length === 0) {
+      setError('No users selected');
+      return;
+    }
+    if (!confirm(`Delete ${ids.length} selected user(s)?`)) return;
+    try {
+      setBusy(true);
+      await usersAPI.deleteUsersBulk(ids);
+      setSuccess('Selected users deleted successfully');
+      setSelected({});
+      await onRefresh();
+    } catch (e: any) {
+      setError(e.message || 'Failed to bulk delete users');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (users.length === 0) return <p>No users found.</p>;
+
+  const allSelectableChecked = users.filter(u => u.role !== 'superadmin').every(u => isSelected(u)) && users.some(u => u.role !== 'superadmin');
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={allSelectableChecked} onChange={toggleAll} />
+            Select All (non-SuperAdmin)
+          </label>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn btn-danger" onClick={bulkDelete} disabled={busy}>Bulk Delete</button>
+        </div>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map(u => (
+            <tr key={getId(u)}>
+              <td>
+                {u.role === 'superadmin' ? null : (
+                  <input type="checkbox" checked={isSelected(u)} onChange={() => toggle(u)} />
+                )}
+              </td>
+              <td>{u.name}</td>
+              <td>{u.email}</td>
+              <td>{u.role}</td>
+              <td>
+                {u.role === 'superadmin' ? (
+                  <span style={{ color: '#666' }}>No actions</span>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {u.role !== 'admin' && (
+                      <button className="btn btn-secondary" onClick={() => changeRole(u, 'admin')} disabled={busy}>
+                        Make Admin
+                      </button>
+                    )}
+                    {u.role !== 'user' && (
+                      <button className="btn btn-secondary" onClick={() => changeRole(u, 'user')} disabled={busy}>
+                        Make User
+                      </button>
+                    )}
+                    <button className="btn btn-danger" onClick={() => deleteOne(u)} disabled={busy}>
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -13,6 +143,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [editingProject, setEditingProject] = useState<ProjectEntry | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [allowedEmails, setAllowedEmails] = useState<AllowedEmail[]>([]);
+  const [newAllowedEmail, setNewAllowedEmail] = useState('');
+  const [newAllowedName, setNewAllowedName] = useState('');
+  const [newAllowedUrn, setNewAllowedUrn] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     users: [
@@ -41,6 +175,7 @@ export default function AdminPage() {
     if (user && (user.role === 'admin' || user.role === 'superadmin')) {
       fetchProjects();
       fetchUsers();
+      fetchAllowedEmails();
     }
   }, [user]);
 
@@ -61,6 +196,42 @@ export default function AdminPage() {
       setUsers(data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch users');
+    }
+  };
+
+  const fetchAllowedEmails = async () => {
+    try {
+      const list = await allowedEmailsAPI.getAll();
+      setAllowedEmails(list);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch allowed emails');
+    }
+  };
+
+  const handleAddAllowedEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      await allowedEmailsAPI.add(newAllowedEmail, newAllowedName, newAllowedUrn);
+      setSuccess('Email added to allowlist');
+      setNewAllowedEmail('');
+      setNewAllowedName('');
+      setNewAllowedUrn('');
+      await fetchAllowedEmails();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add allowed email');
+    }
+  };
+
+  const handleDeleteAllowedEmail = async (id: string) => {
+    if (!confirm('Remove this email from allowlist?')) return;
+    try {
+      await allowedEmailsAPI.removeById(id);
+      setSuccess('Email removed from allowlist');
+      await fetchAllowedEmails();
+    } catch (err: any) {
+      setError(err.message || 'Failed to remove allowed email');
     }
   };
 
@@ -146,54 +317,70 @@ export default function AdminPage() {
             <p style={{ marginBottom: '1rem', color: '#666' }}>
               View all users and change roles (SuperAdmin only).
             </p>
-            {users.length === 0 ? (
-              <p>No users found.</p>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id || (u as any)._id}>
-                      <td>{u.name}</td>
-                      <td>{u.email}</td>
-                      <td>{u.role}</td>
-                      <td>
-                        {u.role === 'superadmin' ? (
-                          <span style={{ color: '#666' }}>No actions</span>
-                        ) : (
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {u.role !== 'admin' && (
-                              <button
-                                className="btn btn-secondary"
-                                onClick={() => handleChangeRole(u, 'admin')}
-                              >
-                                Make Admin
-                              </button>
-                            )}
-                            {u.role !== 'user' && (
-                              <button
-                                className="btn btn-danger"
-                                onClick={() => handleChangeRole(u, 'user')}
-                              >
-                                Make User
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <UsersManager users={users} onRefresh={fetchUsers} setError={setError} setSuccess={setSuccess} />
           </div>
+        )}
+
+        {(user?.role === 'superadmin') && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Allowed Emails (@adypu.edu.in)</h2>
+          <form onSubmit={handleAddAllowedEmail} style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="URN"
+              value={newAllowedUrn}
+              onChange={(e) => setNewAllowedUrn(e.target.value)}
+              required
+              style={{ minWidth: '150px' }}
+            />
+            <input
+              type="text"
+              placeholder="Full name"
+              value={newAllowedName}
+              onChange={(e) => setNewAllowedName(e.target.value)}
+              required
+              style={{ minWidth: '200px' }}
+            />
+            <input
+              type="email"
+              placeholder="student@adypu.edu.in"
+              value={newAllowedEmail}
+              onChange={(e) => setNewAllowedEmail(e.target.value)}
+              required
+            />
+            <button type="submit" className="btn btn-primary">Add</button>
+          </form>
+          {allowedEmails.length === 0 ? (
+            <p>No allowed emails yet.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>URN</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Added</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allowedEmails.map(entry => (
+                  <tr key={entry._id}>
+                    <td>{entry.urn}</td>
+                    <td>{entry.name}</td>
+                    <td>{entry.email}</td>
+                    <td>{new Date(entry.createdAt).toLocaleString()}</td>
+                    <td>
+                      <button className="btn btn-danger" onClick={() => handleDeleteAllowedEmail(entry._id)}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
         )}
 
         {editingProject && (

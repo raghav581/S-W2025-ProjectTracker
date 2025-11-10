@@ -1,5 +1,6 @@
 const express = require('express');
 const ProjectEntry = require('../models/ProjectEntry');
+const AllowedEmail = require('../models/AllowedEmail');
 const { auth, adminAuth } = require('../middleware/auth');
 const router = express.Router();
 
@@ -23,6 +24,19 @@ router.post('/', auth, async (req, res) => {
     for (const user of users) {
       if (!user.name || !user.email || !user.githubUsername) {
         return res.status(400).json({ error: 'Each user must have name, email, and githubUsername' });
+      }
+    }
+
+    // Enforce allowlist for any @adypu.edu.in emails in team
+    const adypuEmails = users
+      .map(u => (u.email || '').toLowerCase())
+      .filter(e => e.endsWith('@adypu.edu.in'));
+    if (adypuEmails.length > 0) {
+      const allowed = await AllowedEmail.find({ email: { $in: adypuEmails } }).lean();
+      const allowedSet = new Set(allowed.map(a => a.email));
+      const notAllowed = adypuEmails.filter(e => !allowedSet.has(e));
+      if (notAllowed.length > 0) {
+        return res.status(403).json({ error: `These emails are not allowed: ${notAllowed.join(', ')}` });
       }
     }
 
@@ -153,6 +167,16 @@ router.put('/:id', auth, async (req, res) => {
       }
       if (uniqueGithubs.size !== users.length) {
         return res.status(400).json({ error: 'GitHub usernames in a team must be unique' });
+      }
+      // Allowlist enforcement for @adypu.edu.in on update
+      const adypuEmailsUpdate = emails.filter(e => e.endsWith('@adypu.edu.in'));
+      if (adypuEmailsUpdate.length > 0) {
+        const allowed = await AllowedEmail.find({ email: { $in: adypuEmailsUpdate } }).lean();
+        const allowedSet = new Set(allowed.map(a => a.email));
+        const notAllowed = adypuEmailsUpdate.filter(e => !allowedSet.has(e));
+        if (notAllowed.length > 0) {
+          return res.status(403).json({ error: `These emails are not allowed: ${notAllowed.join(', ')}` });
+        }
       }
       project.users = users;
     }

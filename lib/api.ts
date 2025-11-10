@@ -29,6 +29,15 @@ export interface ProjectEntry {
   updatedAt: string;
 }
 
+export interface AllowedEmail {
+  _id: string;
+  urn: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const getToken = () => {
   if (typeof window !== 'undefined') {
     return localStorage.getItem('token');
@@ -143,6 +152,42 @@ export const usersAPI = {
     return apiCall(`/api/users/${userId}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
+    });
+  },
+
+  deleteUser: async (userId: string) => {
+    return apiCall(`/api/users/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  deleteUsersBulk: async (ids: string[]) => {
+    return apiCall('/api/users', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids }),
+    });
+  },
+};
+
+// Allowed Emails API
+export const allowedEmailsAPI = {
+  getAll: async (): Promise<AllowedEmail[]> => {
+    return apiCall('/api/allowed-emails');
+  },
+  add: async (email: string, name: string, urn: string): Promise<AllowedEmail> => {
+    return apiCall('/api/allowed-emails', {
+      method: 'POST',
+      body: JSON.stringify({ email, name, urn }),
+    });
+  },
+  removeById: async (id: string) => {
+    return apiCall(`/api/allowed-emails?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+  removeByEmail: async (email: string) => {
+    return apiCall(`/api/allowed-emails?email=${encodeURIComponent(email)}`, {
+      method: 'DELETE',
     });
   },
 };

@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const AllowedEmail = require('../models/AllowedEmail');
 const router = express.Router();
 
 // Helper function to determine role from email
@@ -28,6 +29,14 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ 
         error: 'Invalid email domain. Only @adypu.edu.in and @newtonschool.co emails are allowed.' 
       });
+    }
+
+    // For student signups (@adypu.edu.in), enforce allowlist
+    if (role === 'user') {
+      const exists = await AllowedEmail.findOne({ email: (email || '').toLowerCase() });
+      if (!exists) {
+        return res.status(403).json({ error: 'This email is not allowed to signup. Please contact admin.' });
+      }
     }
 
     // Check if user already exists

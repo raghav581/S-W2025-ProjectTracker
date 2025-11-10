@@ -22,6 +22,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/projecttr
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/allowed-emails', require('./routes/allowedEmails'));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK' });

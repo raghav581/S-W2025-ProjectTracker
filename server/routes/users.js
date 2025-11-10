@@ -87,6 +87,58 @@ router.get('/leaderboard', auth, async (req, res) => {
   }
 });
 
+// Delete a single user (superadmin only)
+router.delete('/:id', superAdminAuth, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (targetId === String(req.user._id)) {
+      return res.status(400).json({ error: 'SuperAdmin cannot delete themselves' });
+    }
+    const targetUser = await User.findById(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (targetUser.role === 'superadmin') {
+      return res.status(403).json({ error: 'Cannot delete a SuperAdmin' });
+    }
+    // Remove user's projects participation by deleting any projects they are part of
+    const email = (targetUser.email || '').toLowerCase();
+    await ProjectEntry.deleteMany({ 'users.email': email });
+    await User.findByIdAndDelete(targetId);
+    res.json({ message: 'User and related project entries deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Server error deleting user' });
+  }
+});
+
+// Bulk delete users (superadmin only)
+router.delete('/', superAdminAuth, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'No user ids provided' });
+    }
+    // Prevent deleting superadmin or self
+    const currentId = String(req.user._id);
+    const users = await User.find({ _id: { $in: ids } });
+    const forbidden = users.filter(u => u.role === 'superadmin' || String(u._id) === currentId);
+    if (forbidden.length > 0) {
+      return res.status(403).json({ error: 'Attempt to delete SuperAdmin or self is not allowed' });
+    }
+    // Delete all projects that include any of the users being deleted
+    const emails = users.map(u => (u.email || '').toLowerCase());
+    if (emails.length > 0) {
+      await ProjectEntry.deleteMany({ 'users.email': { $in: emails } });
+    }
+    await User.deleteMany({ _id: { $in: ids } });
+    res.json({ message: 'Users and related project entries deleted successfully', count: ids.length });
+  } catch (error) {
+    console.error('Bulk delete users error:', error);
+    res.status(500).json({ error: 'Server error bulk deleting users' });
+  }
+});
+
 module.exports = router;
 
 
