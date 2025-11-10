@@ -4,9 +4,6 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useRouter } from 'next/navigation';
 import { authAPI, usersAPI, User } from './api';
 
-// Re-export server-side auth functions for API routes to import from auth.ts
-export { verifyAuth, verifyAdminAuth, verifySuperAdminAuth, getRoleFromEmail, sendError, sendSuccess } from './authServer';
-
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -78,5 +75,3 @@ export function useAuth() {
   }
   return context;
 }
-
-

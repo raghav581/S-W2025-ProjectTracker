@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/authClient';
 import Link from 'next/link';
 
 export default function Navbar() {

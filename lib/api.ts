@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export interface User {
   id: string;
@@ -73,21 +73,21 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
 // Auth API
 export const authAPI = {
   signup: async (name: string, email: string, password: string) => {
-    return apiCall('/api/auth/signup', {
+    return apiCall('/api/auth', {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     });
   },
 
   login: async (email: string, password: string) => {
-    return apiCall('/api/auth/login', {
+    return apiCall('/api/auth?action=login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
   },
 
   verify: async () => {
-    return apiCall('/api/auth/verify');
+    return apiCall('/api/users?action=me');
   },
 };
 
@@ -98,7 +98,7 @@ export const projectsAPI = {
   },
 
   getOne: async (id: string): Promise<ProjectEntry> => {
-    return apiCall(`/api/projects/${id}`);
+    return apiCall(`/api/projects?id=${encodeURIComponent(id)}`);
   },
 
   create: async (data: {
@@ -121,14 +121,14 @@ export const projectsAPI = {
     githubRepoLink?: string;
     demoLink?: string;
   }): Promise<ProjectEntry> => {
-    return apiCall(`/api/projects/${id}`, {
+    return apiCall(`/api/projects?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
 
   delete: async (id: string) => {
-    return apiCall(`/api/projects/${id}`, {
+    return apiCall(`/api/projects?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   },
@@ -137,7 +137,7 @@ export const projectsAPI = {
 // Users API
 export const usersAPI = {
   getMe: async (): Promise<{ user: User }> => {
-    return apiCall('/api/users/me');
+    return apiCall('/api/users?action=me');
   },
 
   getAll: async (): Promise<User[]> => {
@@ -145,18 +145,18 @@ export const usersAPI = {
   },
 
   getLeaderboard: async (): Promise<ProjectEntry[]> => {
-    return apiCall('/api/users/leaderboard');
+    return apiCall('/api/users?action=leaderboard');
   },
 
   updateRole: async (userId: string, role: 'user' | 'admin') => {
-    return apiCall(`/api/users/${userId}/role`, {
+    return apiCall(`/api/users?id=${encodeURIComponent(userId)}`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     });
   },
 
   deleteUser: async (userId: string) => {
-    return apiCall(`/api/users/${userId}`, {
+    return apiCall(`/api/users?id=${encodeURIComponent(userId)}`, {
       method: 'DELETE',
     });
   },

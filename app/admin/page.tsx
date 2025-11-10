@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/authClient';
 import { useRouter } from 'next/navigation';
 import { projectsAPI, ProjectEntry, UserDetail, usersAPI, User, allowedEmailsAPI, AllowedEmail } from '@/lib/api';
 import Navbar from '@/components/Navbar';

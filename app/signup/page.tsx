@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/authClient';
 import Link from 'next/link';
 
 export default function SignupPage() {
