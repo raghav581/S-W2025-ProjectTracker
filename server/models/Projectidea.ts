@@ -42,7 +42,7 @@ const projectIdeaSchema = new Schema<IProjectIdea>(
     },
     takenBy: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: "ProjectEntry",
       default: null,
     },
     takenAt: {

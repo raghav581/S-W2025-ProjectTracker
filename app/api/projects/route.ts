@@ -108,6 +108,30 @@ export async function POST(req: NextRequest) {
     if (!users || !Array.isArray(users) || users.length !== 3) {
       return sendError("Exactly 3 users are required", 400);
     }
+
+    const emails = users.map((u: any) => (u.email || "").toLowerCase());
+
+    const existingProject = await ProjectEntry.findOne({
+      "users.email": { $in: emails },
+    });
+
+    if (existingProject) {
+      // Optional: build a nice error message listing conflicting emails
+      const existingEmails = existingProject.users.map((u: any) =>
+        (u.email || "").toLowerCase()
+      );
+      const conflictingEmails = emails.filter((e) =>
+        existingEmails.includes(e)
+      );
+
+      return sendError(
+        `These emails are already part of another project: ${conflictingEmails.join(
+          ", "
+        )}`,
+        400
+      );
+    }
+
     if (!projectIdea) {
       return sendError("Project idea is required", 400);
     }
@@ -147,7 +171,6 @@ export async function POST(req: NextRequest) {
 
     // One of the three emails must match the logged-in user (non-admin requirement)
     const requesterEmail = user.email.toLowerCase();
-    const emails = users.map((u: any) => (u.email || "").toLowerCase());
     const includesRequester = emails.includes(requesterEmail);
     const isAdmin = user.role === "admin" || user.role === "superadmin";
 
@@ -171,33 +194,43 @@ export async function POST(req: NextRequest) {
       return sendError("GitHub usernames in a team must be unique", 400);
     }
 
-    const claimedIdea = await ProjectIdea.findOneAndUpdate(
-      { _id: projectIdea, isTaken: false },
-      {
-        isTaken: true,
-        takenBy: user._id,
-        takenAt: new Date(),
-      },
-      { new: true }
-    );
-
-    if (!claimedIdea) {
-      return sendError(
-        "Selected project idea is invalid or already taken by another team",
-        400
-      );
-    }
-
     const projectEntry = new ProjectEntry({
       title,
       users,
-      projectIdea: claimedIdea._id,
+      projectIdea,
       githubRepoLink: githubRepoLink || "",
       demoLink: demoLink || "",
       createdBy: user._id,
     });
 
-    await projectEntry.save();
+    try {
+      await projectEntry.save();
+    } catch (error: any) {
+      if (error?.code === 11000 && error?.message?.includes("projectIdea")) {
+        return sendError(
+          "This project idea is already taken by another team",
+          400
+        );
+      }
+      if (error?.code === 11000 || error?.message?.includes("duplicate key")) {
+        return sendError(
+          "A project with the same team members already exists",
+          400
+        );
+      }
+      console.error("Create project error:", error);
+      return sendError("Server error creating project entry", 500);
+    }
+
+    await ProjectIdea.findOneAndUpdate(
+      { _id: projectIdea },
+      {
+        isTaken: true,
+        takenBy: projectEntry._id,
+        takenAt: new Date(),
+      }
+    );
+
     await projectEntry.populate("createdBy", "name email");
 
     return sendSuccess(projectEntry, 201);
@@ -311,7 +344,39 @@ async function handleUpdateProject(req: NextRequest, id: string) {
     }
 
     if (projectIdea) {
-      project.projectIdea = projectIdea;
+      const currentIdeaId = project.projectIdea
+        ? project.projectIdea.toString()
+        : null;
+      const newIdeaId = projectIdea.toString();
+
+      if (currentIdeaId !== newIdeaId) {
+        if (currentIdeaId) {
+          await ProjectIdea.findByIdAndUpdate(currentIdeaId, {
+            isTaken: false,
+            takenBy: null,
+            takenAt: null,
+          });
+        }
+
+        const claimedIdea = await ProjectIdea.findOneAndUpdate(
+          { _id: newIdeaId, isTaken: false },
+          {
+            isTaken: true,
+            takenBy: project._id, 
+            takenAt: new Date(),
+          },
+          { new: true }
+        );
+
+        if (!claimedIdea) {
+          return sendError(
+            "Selected project idea is invalid or already taken by another team",
+            400
+          );
+        }
+
+        project.projectIdea = claimedIdea._id;
+      }
     }
 
     if (githubRepoLink !== undefined) {
@@ -362,6 +427,14 @@ async function handleDeleteProject(req: NextRequest, id: string) {
 
     if (!project) {
       return sendError("Project not found", 404);
+    }
+
+    if (project.projectIdea) {
+      await ProjectIdea.findByIdAndUpdate(project.projectIdea, {
+        isTaken: false,
+        takenBy: null,
+        takenAt: null,
+      });
     }
 
     await ProjectEntry.findByIdAndDelete(id);
