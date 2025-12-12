@@ -37,6 +37,7 @@ async function handleGetAllProjects(req: NextRequest) {
     if (user.role === "admin" || user.role === "superadmin") {
       projects = await ProjectEntry.find()
         .populate("createdBy", "name email")
+        .populate("projectIdea")
         .sort({ createdAt: -1 });
     } else {
       // Regular users can only see projects where their email is in the users array
@@ -44,6 +45,7 @@ async function handleGetAllProjects(req: NextRequest) {
         "users.email": user.email.toLowerCase(),
       })
         .populate("createdBy", "name email")
+        .populate("projectIdea")
         .sort({ createdAt: -1 });
     }
 
@@ -63,10 +65,9 @@ async function handleGetProject(req: NextRequest, id: string) {
       return sendError(error || "Unauthorized", 401);
     }
 
-    const project = await ProjectEntry.findById(id).populate(
-      "createdBy",
-      "name email"
-    );
+    const project = await ProjectEntry.findById(id)
+      .populate("createdBy", "name email")
+      .populate("projectIdea");
 
     if (!project) {
       return sendError("Project not found", 404);

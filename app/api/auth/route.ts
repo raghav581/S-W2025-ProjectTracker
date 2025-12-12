@@ -68,7 +68,7 @@ async function handleSignup(req: NextRequest) {
 async function handleLogin(req: NextRequest) {
   try {
     const { email, password } = await req.json();
-
+    console.log('Login attempt for email:', email);
     await dbConnect();
 
     // Find user

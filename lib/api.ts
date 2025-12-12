@@ -213,7 +213,8 @@ export const allowedEmailsAPI = {
 };
 
 export const projectIdeasAPI = {
-  getAll: async (): Promise<ProjectIdea[]> => {
-    return apiCall("/api/projectideas");
+  getAll: async (includeTaken: boolean = false): Promise<ProjectIdea[]> => {
+    const params = includeTaken ? "?includeTaken=true" : "";
+    return apiCall(`/api/projectideas${params}`);
   },
 };

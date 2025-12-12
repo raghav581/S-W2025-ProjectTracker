@@ -64,7 +64,7 @@ export default function DashboardPage() {
 
   const fetchProjectIdeas = async () => {
     try {
-      const data = await projectIdeasAPI.getAll();
+      const data = await projectIdeasAPI.getAll(true); // Include taken ideas for editing
       console.log("Check : ", data);
 
       setProjectIdeas(data);
@@ -118,10 +118,14 @@ export default function DashboardPage() {
 
   const handleEdit = (project: ProjectEntry) => {
     setEditingProject(project);
+    // Handle projectIdea as either an object (from API) or a string (ID)
+    const projectIdeaId = typeof project.projectIdea === 'object' && project.projectIdea !== null
+      ? String((project.projectIdea as any)._id)
+      : String(project.projectIdea);
     setFormData({
       title: project.title,
       users: project.users,
-      projectIdea: project.projectIdea,
+      projectIdea: projectIdeaId,
       githubRepoLink: project.githubRepoLink,
       demoLink: project.demoLink,
     });
@@ -146,7 +150,8 @@ export default function DashboardPage() {
       </>
     );
   }
-
+  console.log(projectIdeas, formData)
+  
   return (
     <>
       <Navbar />
@@ -252,7 +257,7 @@ export default function DashboardPage() {
                 >
                   <option value="">Select a project idea</option>
                   {projectIdeas.map((idea) => (
-                    <option key={idea._id} value={idea._id}>
+                    <option key={idea._id} value={String(idea._id)}>
                       {idea.code}. {idea.title} ({idea.level})
                     </option>
                   ))}
@@ -335,7 +340,9 @@ export default function DashboardPage() {
                   <div>
                     <h2>{project.title}</h2>
                     <div style={{ color: "#666", marginTop: "0.25rem" }}>
-                      Idea: {project.projectIdea}
+                      Idea: {typeof project.projectIdea === 'object' && project.projectIdea
+                        ? `${(project.projectIdea as any).code}. ${(project.projectIdea as any).title}`
+                        : project.projectIdea}
                     </div>
                   </div>
                   {canEdit(project) && (

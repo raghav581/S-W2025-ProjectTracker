@@ -25,9 +25,10 @@ async function handleGetAllIdeas(req: NextRequest, includeTaken: boolean) {
       return sendError(error || "Unauthorized", 401);
     }
 
-    const filter: Record<string, any> = {
-      isTaken: false,
-    };
+    const filter: Record<string, any> = {};
+    if (!includeTaken) {
+      filter.isTaken = false;
+    }
 
     const ideas = await ProjectIdea.find(filter).sort({ code: 1 });
 
